@@ -1,335 +1,133 @@
-# 💊 PharmaAI-MediTrust
-### AI-Powered Medicine Verification & Drug Safety Platform
-
-PharmaAI-MediTrust is an AI-based medicine verification system that helps users verify medicine authenticity, detect counterfeit drugs, identify drug interactions, and generate safety reports using OCR, public healthcare APIs, and machine learning.
-
-The platform extracts medicine details from images or text, validates them against trusted medical databases, analyzes possible drug interactions, and provides an easy-to-understand risk assessment.
+# Drug Authenticity & Interaction AI
+### Console-based pipeline — OCR → Resolve → Interactions → Report
 
 ---
 
-# 🚀 Features
-
-- 📷 OCR-based medicine label extraction
-- ✅ Medicine authenticity verification
-- 💊 Drug interaction detection
-- 🔍 Batch number verification
-- 📄 Automatic risk report generation
-- 🌐 REST API using FastAPI
-- 🖥️ Interactive frontend dashboard
-- 🌍 Multilingual support using Sarvam AI
-- 📦 JSON report export
-- 📊 Medicine safety analysis
-
----
-
-# 🛠️ Technologies Used
-
-## Backend
-- Python
-- FastAPI
-- Uvicorn
-
-## Frontend
-- HTML
-- CSS
-- JavaScript
-
-## Database
-- MongoDB
-
-## AI & APIs
-- Sarvam AI
-- RxNorm API
-- OpenFDA API
-- PubChem API
-
-## Libraries
-- Requests
-- Pillow
-- OpenCV
-- NumPy
-- Pyzbar
-- Bcrypt
-- Python-JOSE
-- HTTPX
-
----
-
-# 📁 Project Structure
+## Project Structure
 
 ```
-PharmaAI-MediTrust/
-│
-├── core/
-│   ├── batch_verify.py
-│   ├── interactions.py
-│   ├── meditrust_db.py
-│   ├── ocr_fixed.py
-│   ├── report.py
-│   └── resolver.py
-│
-├── frontend/
-│   ├── index.html
-│   └── dashboard.html
-│
-├── data/
-│   └── Demo verification dataset
-│
-├── reports/
-│   └── Generated JSON reports
-│
-├── uploads/
-│   └── Uploaded medicine images
-│
-├── tests/
-│
-├── api_bridge.py
-├── main.py
+drug_ai/
+├── main.py                  ← Entry point (run this)
 ├── requirements.txt
-└── README.md
+├── core/
+│   ├── ocr_fixed.py         ← Your original OCR module (unchanged)
+│   ├── resolver.py          ← Drug name → canonical identity + authenticity
+│   ├── interactions.py      ← DDI check via RxNorm + OpenFDA (3-tier)
+│   └── report.py            ← Risk report builder + JSON export
+└── reports/                 ← Auto-created, stores exported JSON reports
 ```
 
 ---
 
-# ⚙️ Installation
+## Setup
 
-## Clone the repository
-
-```bash
-git clone https://github.com/yourusername/PharmaAI-MediTrust.git
-cd PharmaAI-MediTrust
-```
-
-## Create Virtual Environment
-
-Windows
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-Linux / Mac
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-## Install Dependencies
-
+### 1. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
+### 2. Set your OpenRouter API key
+Open `core/ocr_fixed.py` and set:
+```python
+API_KEY = "your_openrouter_key_here"
+```
+> Only needed for **image mode**. Text mode uses free public APIs only.
+
 ---
 
-# ▶️ Running the Project
+## Usage
 
-## Start the FastAPI Backend
-
+### Image mode (OCR → full pipeline)
 ```bash
-uvicorn api_bridge:app --reload
+python main.py --image "C:\path\to\label.jpg"
 ```
 
-or
+### Text mode (type drug name → full pipeline)
+```bash
+python main.py --drug "Clobetasol Propionate"
+python main.py --drug "metformin"
+python main.py --drug "CLONATE"
+```
 
+### Interactive mode (prompts you)
 ```bash
 python main.py
 ```
 
 ---
 
-## Open Frontend
-
-Simply open
+## Pipeline Flow
 
 ```
-frontend/index.html
-```
-
-or
-
-```
-frontend/dashboard.html
-```
-
-in your browser.
-
----
-
-# 🧪 Usage
-
-### Image Verification
-
-Upload a medicine image.
-
-The system will:
-
-- Extract text using OCR
-- Identify the medicine
-- Verify authenticity
-- Detect suspicious medicines
-- Generate a safety report
-
----
-
-### Text Verification
-
-Enter the medicine name manually.
-
-Example:
-
-```
-Paracetamol
-```
-
-or
-
-```
-Metformin
-```
-
-The application fetches:
-
-- Generic name
-- Drug information
-- Manufacturer details
-- Drug interactions
-- Safety recommendations
-
----
-
-# 🔄 Workflow
-
-```
-Medicine Image
-        │
-        ▼
-OCR Extraction
-        │
-        ▼
-Medicine Identification
-        │
-        ▼
-Medicine Verification
-        │
-        ▼
-Drug Interaction Analysis
-        │
-        ▼
-Risk Assessment
-        │
-        ▼
-Safety Report Generation
+Image path ──→ OCR (2-pass VL model) ──┐
+                                        ├──→ Drug Resolver
+Drug name (text) ──────────────────────┘        │
+                                                 │  RxNorm API  → RxCUI + generic name
+                                                 │  PubChem API → CID + SMILES + formula
+                                                 │  OpenFDA API → manufacturer + type
+                                                 │  Rules       → suspicion score (0–1)
+                                                 ↓
+                                    Interaction Engine
+                                         │
+                                         │  Tier 1: RxNorm list API
+                                         │  Tier 2: RxNorm pairwise
+                                         │  Tier 3: OpenFDA FAERS signals
+                                         │  Merge + deduplicate
+                                         ↓
+                                    Risk Report
+                                         │
+                                         │  Full console display
+                                         │  Combined risk score
+                                         └──→ JSON export (optional)
 ```
 
 ---
 
-# 📊 APIs Used
+## APIs Used (All Free, No Key Required)
 
 | API | Purpose |
-|------|----------|
-| RxNorm | Drug Identification |
-| OpenFDA | Medicine Labels & Safety Data |
-| PubChem | Chemical Information |
-| Sarvam AI | OCR, Translation & AI Processing |
+|-----|---------|
+| RxNorm (NLM) | Drug name → RxCUI, generic name, interaction list |
+| PubChem (NCBI) | Drug → SMILES, CID, molecular formula |
+| OpenFDA | Label data, manufacturer, FAERS adverse event signals |
+
+> OpenRouter key is only needed for the VL model in OCR image mode.
 
 ---
 
-# 📄 Generated Reports
+## Output
 
-The system automatically generates reports containing:
+### Console
+- Drug identity card (brand, generic, class, formula, route)
+- Authenticity verdict with suspicion flags
+- Interaction table with severity color codes
+- Combined risk score with recommendation
 
-- Medicine Information
-- Generic Name
-- Manufacturer
-- Drug Authenticity Status
-- Counterfeit Indicators
-- Drug Interactions
-- Risk Level
-- Medical Recommendations
+### JSON export (`reports/` folder)
+Full structured report with all pipeline data — ready for the future frontend.
 
-Reports are saved inside:
+---
+
+## Next Steps (Roadmap)
+
+- [ ] GNN drug interaction model (SMILES already resolved in pipeline)
+- [ ] CDSCO India drug database integration
+- [ ] DrugBank XML local lookup (download from drugbank.com)
+- [ ] Frontend web app (identity card + risk charts)
+- [ ] Authentication layer
+
+---
+
+## Sample Run
 
 ```
-reports/
+python main.py --image label.jpg
+
+  → OCR extracts: CLONATE® | Clobetasol Propionate | 0.05% w/w
+  → Resolver: RxCUI 41493 | PubChem CID 5311051 | C25H32ClFO5
+  → Authenticity: 🚨 ALERT (40%) — missing batch, exp date, manufacturer
+  → Enter other drugs: warfarin, aspirin
+  → Interactions: 2 found (1 moderate, 1 minor)
+  → Overall risk: MODERATE
+  → Export report? y → reports/report_clobetasol_20250101_120000.json
 ```
-
----
-
-# 📦 Requirements
-
-Major dependencies include:
-
-- FastAPI
-- Requests
-- Pillow
-- OpenCV
-- NumPy
-- MongoDB
-- Uvicorn
-- Pyzbar
-- Sarvam AI
-- HTTPX
-
-Install everything using:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# 🎯 Future Enhancements
-
-- QR Code Authentication
-- Blockchain-based Drug Tracking
-- AI Counterfeit Detection
-- Mobile Application
-- Doctor Portal
-- Pharmacy Dashboard
-- CDSCO Integration
-- DrugBank Integration
-- Voice-based Medicine Search
-
----
-
-# 👨‍💻 Contributors
-
-Developed as an AI-powered healthcare solution for medicine verification and patient safety.
-
----
-
-# 📜 License
-
-This project is intended for educational and research purposes.
-
----
-
-# ⭐ Acknowledgements
-
-- OpenFDA
-- RxNorm
-- PubChem
-- Sarvam AI
-- FastAPI Community
-- Python Open Source Community
-
----
-
-## 📸 Sample Output
-
-- Medicine authenticity status
-- Drug interaction alerts
-- Risk score
-- JSON safety report
-- Medicine information dashboard
-
----
-
-## 💡 Project Objective
-
-To provide an intelligent medicine verification platform that helps users identify counterfeit medicines, understand drug interactions, and improve medication safety through AI-powered analysis and trusted medical databases.
